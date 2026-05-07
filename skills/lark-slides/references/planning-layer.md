@@ -11,8 +11,8 @@
 3. 选择唯一 plan 目录：`.lark-slides/plan/<deck-or-task-id>/`。
 4. 先创建目录：`mkdir -p .lark-slides/plan/<deck-or-task-id>`。
 5. 写入 `.lark-slides/plan/<deck-or-task-id>/slide_plan.json`。
-6. 读取 `xml-schema-quick-ref.md` 和 `visual-planning.md`。
-7. 按 plan 和 visual planning 规则逐页生成 XML，把 `layout_type`、`visual_focus`、`text_density` 转成具体页面几何和文本量约束。
+6. 读取 `xml-schema-quick-ref.md`、`visual-planning.md` 和 `asset-planning.md`。
+7. 按 plan、visual planning 和 asset planning 规则逐页生成 XML，把 `layout_type`、`visual_focus`、`text_density` 转成具体页面几何和文本量约束，并把缺失素材转成可执行兜底视觉。
 8. 创建 PPT 后用 `xml_presentations.get` 回读，核对页面数量、关键元素和 plan 到 XML 的对应关系。
 
 模板不能代替 plan。模板搜索和摘要只能影响 `theme_style`、页面流、布局选择和局部布局骨架；最终仍必须有 `.lark-slides/plan/<deck-or-task-id>/slide_plan.json`。
@@ -47,7 +47,12 @@ Rules:
       "key_message": "The initiative is ready for a focused pilot.",
       "layout_type": "title-cover",
       "visual_focus": "Large title area with one concise supporting statement.",
-      "asset_need": "Planning only: optional product logo or abstract shape-based motif.",
+      "asset_need": {
+        "asset_type": "logo",
+        "purpose": "Signal product or team identity on the opening page.",
+        "suggested_query": "product logo",
+        "fallback_if_missing": "Use a small text badge and abstract shape motif instead of a real logo."
+      },
       "text_density": "low",
       "speaker_intent": "Frame the decision and establish the deck's point of view."
     }
@@ -71,7 +76,7 @@ Each slide must include:
 - `key_message`: the one idea this page must land.
 - `layout_type`: planned page structure.
 - `visual_focus`: dominant visual object or region.
-- `asset_need`: planning-only asset need; no search, download, or upload required in Phase 1.
+- `asset_need`: planning-only structured asset metadata; no search, download, or upload required. Follow `asset-planning.md`.
 - `text_density`: `low`, `medium`, or `high`.
 - `speaker_intent`: why the speaker needs this page and how it advances the story.
 
@@ -104,13 +109,22 @@ Do not let all pages become title + bullet slides. For decks of 4 or more pages,
 
 ## Asset Planning
 
-`asset_need` is metadata in this phase. It can describe a desired figure, diagram, chart, icon, logo, screenshot, or fallback shape-based visual, but it must not require web search, local download, or media upload.
+`asset_need` is metadata. It can describe a desired figure, diagram, chart, icon, logo, screenshot, or fallback shape-based visual, but it must not require web search, local download, or media upload.
+
+Use an object for one planned asset, an array for multiple real needs, or `asset_type: "none"` when no asset is useful. Each planned asset must include:
+
+- `asset_type`: one of `paper_figure`, `architecture_diagram`, `icon`, `logo`, `chart`, `infographic`, `screenshot`, `flow_diagram`, or `none`.
+- `purpose`: why this asset helps the page's key message.
+- `suggested_query`: short future lookup hint only; do not execute it unless separately requested.
+- `fallback_if_missing`: concrete XML-native visual plan using shapes, arrows, labels, tables, simple charts, or placeholder panels.
+
+For detailed rules and examples, read `asset-planning.md`.
 
 Good examples:
 
-- `Planning only: simplified architecture diagram with boxes and arrows; fallback to shape-based diagram.`
-- `Planning only: optional customer logo; fallback to text label in a small badge.`
-- `Planning only: chart-like visual for adoption trend; fallback to simple line made from shapes.`
+- `{"asset_type":"architecture_diagram","purpose":"Explain component relationships.","suggested_query":"service architecture diagram","fallback_if_missing":"Draw grouped boxes and arrows with short labels."}`
+- `{"asset_type":"logo","purpose":"Identify the customer context.","suggested_query":"customer logo","fallback_if_missing":"Use a text label in a small badge."}`
+- `{"asset_type":"chart","purpose":"Show adoption trend.","suggested_query":"monthly adoption trend chart","fallback_if_missing":"Draw a simple line chart with shapes and value labels."}`
 
 ## XML Generation Contract
 
@@ -120,7 +134,7 @@ Before writing each slide XML, map the plan fields to concrete decisions:
 - `layout_type` determines the coordinate structure and element types. Use `visual-planning.md` for concrete layout rules.
 - `visual_focus` determines the largest visual region or emphasized object.
 - `text_density` caps visible text volume.
-- `asset_need` informs placeholder diagrams, icons, charts, or shape-based fallback visuals only.
+- `asset_need` informs placeholder diagrams, icons, charts, screenshots, or shape-based fallback visuals only. Missing real assets must use `fallback_if_missing`, not blank regions.
 
 After creating the PPT, fetch the presentation and verify:
 
@@ -128,5 +142,6 @@ After creating the PPT, fetch the presentation and verify:
 - Every page has the planned title and key message represented.
 - At least several pages have visibly different XML layout structures.
 - Planned `visual_focus` appears as a dominant visual region or object.
+- At least 3 pages actively plan `asset_need` when the deck topic allows, and each planned asset has a visible fallback if no real asset was used.
 - `text_density` is reflected in the amount of visible text.
 - Pages are not crowded, and any planned `timeline`, `comparison`, or `architecture-diagram` page uses its matching visual structure.

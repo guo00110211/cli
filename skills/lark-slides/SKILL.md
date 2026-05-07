@@ -18,6 +18,8 @@ metadata:
 
 **CRITICAL — 新建演示文稿或大幅改写页面时，生成 XML 前 MUST 读取 [visual-planning.md](references/visual-planning.md)，确保 `layout_type`、`visual_focus`、`text_density` 实际改变页面几何、主视觉和文本量。**
 
+**CRITICAL — 新建演示文稿或大幅改写页面时，规划 `asset_need` MUST 遵循 [asset-planning.md](references/asset-planning.md)：只做元数据规划，必须有 `fallback_if_missing`，不得要求真实搜索、下载或上传素材。**
+
 **CRITICAL — 如果用户提到“模板”“套用模板”“参考某种主题/风格/版式”，或用户需求明显落在已有场景模板内（如工作汇报、产品介绍、商业计划书、培训、晋升汇报等），MUST 先用 [`scripts/template_tool.py`](scripts/template_tool.py) 的 `search` 做模板检索；默认给出 2-3 个最匹配模板候选供用户选择。锁定模板后用 `summarize` 获取主题和布局摘要；只有需要布局骨架时才用 `extract` 裁切目标页型 XML。不要直接读取完整模板 XML。**
 
 > [!NOTE]
@@ -76,6 +78,7 @@ lark-cli slides +create --title "演示文稿标题" --slides '[
 | [xml-schema-quick-ref.md](references/xml-schema-quick-ref.md) | **XML 元素和属性速查，必读** |
 | [planning-layer.md](references/planning-layer.md) | **新建 PPT / 大幅改写前的持久化规划层，必读** |
 | [visual-planning.md](references/visual-planning.md) | **新建 PPT / 大幅改写时的版式智能规则，必读** |
+| [asset-planning.md](references/asset-planning.md) | **新建 PPT / 大幅改写时的轻量资产规划规则，必读** |
 
 ### 选读（需要时查阅）
 
@@ -84,6 +87,7 @@ lark-cli slides +create --title "演示文稿标题" --slides '[
 | 需要了解详细 XML 结构 | [xml-format-guide.md](references/xml-format-guide.md) |
 | 需要新建 PPT 或大幅改写页面 | [planning-layer.md](references/planning-layer.md) |
 | 需要把 plan 转成有差异的页面版式 | [visual-planning.md](references/visual-planning.md) |
+| 需要规划图、图标、截图、图表或兜底视觉 | [asset-planning.md](references/asset-planning.md) |
 | 需要快速筛模板、做低成本路由 | [`scripts/template_tool.py search`](scripts/template_tool.py) |
 | 需要匹配 PPT 模板/主题风格 | [template-catalog.md](references/template-catalog.md) |
 | 需要按页型抽摘要或裁切 XML 片段 | [`scripts/template_tool.py`](scripts/template_tool.py) |
@@ -150,6 +154,7 @@ Step 1: 需求澄清 & 读取知识
     · xml-format-guide.md — 详细结构与示例
     · slides_demo.xml — 真实 XML 示例
   - 新建 PPT / 大幅改写时，还必须读取 visual-planning.md，把 layout_type、visual_focus、text_density 转成页面几何、主视觉和文本量约束
+  - 新建 PPT / 大幅改写时，还必须读取 asset-planning.md，把 asset_need 写成结构化元数据，并为每个计划资产准备形状/图表/标签等兜底视觉
 
 Step 2: 生成大纲 → 用户确认 → 写入 slide_plan.json
   - 生成大纲前，先确认用户是否采用推荐模板；轻量任务且候选中有明显最佳匹配时，可在大纲里声明“默认基于 <template-id> 改写”并继续，但正式创建前必须给用户改选机会
@@ -161,10 +166,11 @@ Step 2: 生成大纲 → 用户确认 → 写入 slide_plan.json
   - `<deck-or-task-id>` 必须能区分当前 deck 或任务；新建时可用标题 slug + 日期时间，已有 PPT 改写时优先用 `xml_presentation_id`
   - `slide_plan.json` 必须包含 `presentation_goal`、`audience`、`theme_style`，以及每页的 `page`、`title`、`key_message`、`layout_type`、`visual_focus`、`asset_need`、`text_density`、`speaker_intent`
   - 模板只能影响 `theme_style`、页面流和布局选择；不能代替 `slide_plan.json`
-  - `asset_need` 在规划层只描述需要的图、图标、图表或可用形状兜底，不要求搜索、下载或上传素材
+  - `asset_need` 在规划层只描述需要的图、图标、图表或可用形状兜底；必须包含 `asset_type`、`purpose`、`suggested_query`、`fallback_if_missing`，不要求搜索、下载或上传素材
 
 Step 3: 按 slide_plan.json 生成 XML → 创建
   - 逐页生成 XML 时，必须显式消费对应 plan 条目：`key_message` 决定页面主结论，`layout_type` 决定几何结构，`visual_focus` 决定主视觉区域，`text_density` 决定可见文本量
+  - 对有 `asset_need` 的页面，优先用可执行的兜底视觉完成 XML：用形状、箭头、分组标签、简化图表或占位图框表达 `fallback_if_missing`；不要因为缺少真实素材留空
   - 生成 XML 前按 visual-planning.md 选择版式几何：`timeline` 要有时间轴或里程碑结构，`comparison` 要有并列对比区域，`architecture-diagram` 要有组件/连线/分组，`big-number` 要让指标成为最大视觉对象
   - 不允许所有页面退化成“标题 + bullet list”；至少让多页的 XML 坐标、区域比例、主视觉对象明显不同
   - `text_density=low` 时不要写 bullet list；`medium` 通常不超过 4 个要点；`high` 要用表格、分栏、分组标签或注释承载细节，不要放一个长 bullet 框
@@ -200,6 +206,7 @@ Step 4: 审查 & 交付
     · 关键布局坐标和尺寸是否合理，是否出现明显重叠？
     · 配色是否统一？字号层级是否合理？
     · `slide_plan.json` 中的 `layout_type`、`visual_focus`、`text_density` 是否实际影响了页面 XML？
+    · 至少 3 页是否主动规划了 `asset_need`（当页数和主题允许），且每个计划资产都有可执行兜底视觉？
     · 是否至少有多种页面结构，而不是全篇标题 + bullets？
     · 如果 plan 中包含 `timeline`、`comparison`、`architecture-diagram`，对应页面是否真的使用了时间轴、并列对比、组件连线/分组结构？
   - 如果本地有 Python 3，运行
