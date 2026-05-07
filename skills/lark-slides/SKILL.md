@@ -14,6 +14,8 @@ metadata:
 
 **CRITICAL — 生成任何 XML 之前，MUST 先用 Read 工具读取 [xml-schema-quick-ref.md](references/xml-schema-quick-ref.md)，禁止凭记忆猜测 XML 结构。**
 
+**CRITICAL — 新建演示文稿或大幅改写页面时，MUST 先生成 `.lark-slides/plan/<deck-or-task-id>/slide_plan.json`，再生成 XML。先创建对应目录，规划层规则见 [planning-layer.md](references/planning-layer.md)。仅替换一个标题、插入一个块等小型已有页编辑可豁免。**
+
 **CRITICAL — 如果用户提到“模板”“套用模板”“参考某种主题/风格/版式”，或用户需求明显落在已有场景模板内（如工作汇报、产品介绍、商业计划书、培训、晋升汇报等），MUST 先用 [`scripts/template_tool.py`](scripts/template_tool.py) 的 `search` 做模板检索；默认给出 2-3 个最匹配模板候选供用户选择。锁定模板后用 `summarize` 获取主题和布局摘要；只有需要布局骨架时才用 `extract` 裁切目标页型 XML。不要直接读取完整模板 XML。**
 
 > [!NOTE]
@@ -70,12 +72,14 @@ lark-cli slides +create --title "演示文稿标题" --slides '[
 | 文档 | 说明 |
 |------|------|
 | [xml-schema-quick-ref.md](references/xml-schema-quick-ref.md) | **XML 元素和属性速查，必读** |
+| [planning-layer.md](references/planning-layer.md) | **新建 PPT / 大幅改写前的持久化规划层，必读** |
 
 ### 选读（需要时查阅）
 
 | 场景 | 文档 |
 |------|------|
 | 需要了解详细 XML 结构 | [xml-format-guide.md](references/xml-format-guide.md) |
+| 需要新建 PPT 或大幅改写页面 | [planning-layer.md](references/planning-layer.md) |
 | 需要快速筛模板、做低成本路由 | [`scripts/template_tool.py search`](scripts/template_tool.py) |
 | 需要匹配 PPT 模板/主题风格 | [template-catalog.md](references/template-catalog.md) |
 | 需要按页型抽摘要或裁切 XML 片段 | [`scripts/template_tool.py`](scripts/template_tool.py) |
@@ -142,11 +146,21 @@ Step 1: 需求澄清 & 读取知识
     · xml-format-guide.md — 详细结构与示例
     · slides_demo.xml — 真实 XML 示例
 
-Step 2: 生成大纲 → 用户确认 → 创建
+Step 2: 生成大纲 → 用户确认 → 写入 slide_plan.json
   - 生成大纲前，先确认用户是否采用推荐模板；轻量任务且候选中有明显最佳匹配时，可在大纲里声明“默认基于 <template-id> 改写”并继续，但正式创建前必须给用户改选机会
   - 生成结构化大纲（每页标题 + 要点 + 布局描述），交给用户确认
   - 如果已选模板，大纲和页面布局要明确标注“基于哪个模板/哪些模板改写”
   - 如果用户明确不要模板，直接按自定义风格继续，不要重复推动模板选择
+  - 新建 PPT 或大幅改写页面时，必须在生成 XML 前写入 `.lark-slides/plan/<deck-or-task-id>/slide_plan.json`
+  - 写入前先创建目录：`mkdir -p .lark-slides/plan/<deck-or-task-id>`
+  - `<deck-or-task-id>` 必须能区分当前 deck 或任务；新建时可用标题 slug + 日期时间，已有 PPT 改写时优先用 `xml_presentation_id`
+  - `slide_plan.json` 必须包含 `presentation_goal`、`audience`、`theme_style`，以及每页的 `page`、`title`、`key_message`、`layout_type`、`visual_focus`、`asset_need`、`text_density`、`speaker_intent`
+  - 模板只能影响 `theme_style`、页面流和布局选择；不能代替 `slide_plan.json`
+  - `asset_need` 在规划层只描述需要的图、图标、图表或可用形状兜底，不要求搜索、下载或上传素材
+
+Step 3: 按 slide_plan.json 生成 XML → 创建
+  - 逐页生成 XML 时，必须显式消费对应 plan 条目：`key_message` 决定页面主结论，`layout_type` 决定几何结构，`visual_focus` 决定主视觉区域，`text_density` 决定可见文本量
+  - 不允许所有页面退化成“标题 + bullet list”；至少让多页的 XML 坐标、区域比例、主视觉对象明显不同
   - 先判断创建方式：
     · 简单 XML：可用 `slides +create --slides '[...]'` 一步创建
     · 复杂 XML：优先先 `slides +create` 创建空白 PPT，再用 `xml_presentation.slide.create` 逐页添加
@@ -171,13 +185,15 @@ Step 2: 生成大纲 → 用户确认 → 创建
     · 如果 XML 已落到本地文件且可运行 Python，先执行 `layout_lint.py --input <file>`；它会先检查 XML well-formed 再检查布局风险，但不等价于完整 XSD schema 校验；有 error 先修复再创建
   - 如果使用模板生成页面，先复用模板骨架再填内容，不要直接复制模板中的长段占位文本
 
-Step 3: 审查 & 交付
+Step 4: 审查 & 交付
   - 创建完成后，必须用 xml_presentations.get 读取全文 XML 做创建后验证，确认：
     · 页数是否正确？
     · 每页 `<data>` 是否包含预期的 `<shape>` / `<img>` / 其他元素？
     · 文本内容是否完整，是否有被截断、丢失、空白区域？
     · 关键布局坐标和尺寸是否合理，是否出现明显重叠？
     · 配色是否统一？字号层级是否合理？
+    · `slide_plan.json` 中的 `layout_type`、`visual_focus`、`text_density` 是否实际影响了页面 XML？
+    · 是否至少有多种页面结构，而不是全篇标题 + bullets？
   - 如果本地有 Python 3，运行
     `python3 skills/lark-slides/scripts/layout_lint.py --input presentation.xml`
     做重叠、越界、页脚碰撞、文本高度风险检查；有 error 先修复再交付
@@ -425,7 +441,7 @@ lark-cli slides <resource> <method> [flags] # 调用 API
 
 ## 核心规则
 
-1. **先定模板/风格并出大纲再动手**：如果需求可匹配模板，先给用户 2-3 个模板候选；模板或自定义风格确定后，再生成大纲交给用户确认，避免返工
+1. **先规划再写 XML**：新建演示文稿或大幅改写页面时，必须先写入 `.lark-slides/plan/<deck-or-task-id>/slide_plan.json`；模板、风格和大纲只能作为规划输入，不能绕过规划层
 2. **创建流程**：简单短 XML（1-3 页、结构简单、特殊字符少）可用 `slides +create --slides '[...]'` 一步创建；复杂内容、含图片/中文大段文本/嵌套引号/较多特殊字符，或超过 10 页时，默认先 `slides +create` 创建空白 PPT，再用 `xml_presentation.slide.create` 逐页添加
 3. **`<slide>` 直接子元素只有 `<style>`、`<data>`、`<note>`**：文本和图形必须放在 `<data>` 内
 4. **文本通过 `<content>` 表达**：必须用 `<content><p>...</p></content>`，不能把文字直接写在 shape 内
@@ -510,6 +526,7 @@ lark-cli slides <resource> <method> [flags] # 调用 API
 | [template-catalog.md](references/template-catalog.md) | **按场景/色调匹配现成 PPT 模板，并定位到页型范围** |
 | [`scripts/template_tool.py`](scripts/template_tool.py) | **可选 Python 辅助脚本：`search` / `summarize` / `extract`，支持 `--layout-tag` 与 `extract --with-summary`** |
 | [`scripts/layout_lint.py`](scripts/layout_lint.py) | **本地预检脚本：先检查 XML well-formed，再检测重叠、越界、页脚碰撞、文本高度风险；不是完整 XSD schema 校验** |
+| [planning-layer.md](references/planning-layer.md) | 新建 PPT / 大幅改写前的持久化规划层 |
 | [xml-schema-quick-ref.md](references/xml-schema-quick-ref.md) | **XML Schema 精简速查（必读）** |
 | [slide-templates.md](references/slide-templates.md) | 可复制的 Slide XML 模板 |
 | [xml-format-guide.md](references/xml-format-guide.md) | XML 详细结构与示例 |
